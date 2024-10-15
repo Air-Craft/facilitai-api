@@ -129,7 +129,7 @@ const promptTemplates = [
 
 // Helper function to replace placeholders in the templates
 function fillTemplate(template, values) {
-  return template.replace(/{([^}]+)}/g, (match, key) => values[key] || match);
+  return template.replace(/{([^}]+)}/g, (match, key) => (values[key] !== undefined ? values[key] : match));
 }
 
 // Function to generate synthetic prompts
@@ -147,8 +147,8 @@ function generateSyntheticPrompts(numPrompts, data) {
 
 	console.log(`Generating ${numPrompts} from ${genres.length} genres, ${activityTypes.length} activity types, ${physicalities.length} physicalities, ${groupTypes.length} group types, ${durations.length} durations, ${miscTags.length} tags`)
 
-  const prompts = [];
-  while (prompts.length < numPrompts) { //if (let i = 0; i < numPrompts; i++) {
+  const promptResponses = [];
+  while (promptResponses.length < numPrompts) { //if (let i = 0; i < numPrompts; i++) {
     
   	const template = promptTemplates[Math.floor(Math.random() * promptTemplates.length)];
     // console.log("TEMPL", template)
@@ -216,9 +216,10 @@ function generateSyntheticPrompts(numPrompts, data) {
 
     
     if (matchingProcesses.length > 0) {
-    	if (Object.keys(placeholders).length > 1) {
-    		console.log(`MATCHED ${matchingProcesses.length} for `, placeholders)
-    	}
+    	// if (Object.keys(placeholders).length > 1) {
+    	// 	console.log(`MATCHED ${matchingProcesses.length} for `, placeholders)
+    	// }
+
       // Construct the response by listing the matching processes
 
       const response = matchingProcesses.map(process => {
@@ -239,18 +240,25 @@ function generateSyntheticPrompts(numPrompts, data) {
         // 	groupType: groupType
         // })
 
-        return fillTemplate(processResponseTemplate, {
+        const replaceMap = {
         	title: title,
         	description: description,
         	instructions: instructions,
-        	duration: duration,	
+        	duration: duration,
         	groupType: groupType
-        })
+        }
+
+        console.log(replaceMap)
+
+        return fillTemplate(processResponseTemplate, replaceMap)
       }).join('\n\n');
 
       // Add the prompt and response pair to the prompts array
       const fullResp = `${responsePrefix} ${response}`
-      prompts.push({ prompt, fullResp });
+      const promptResp = { prompt, fullResp }
+      console.log(promptResp)
+
+      promptResponses.push(promptResp);
 
     } else {
       // Optionally, handle cases with no matching processes
@@ -258,10 +266,11 @@ function generateSyntheticPrompts(numPrompts, data) {
       continue;
     }
 
-    if (prompts.length % 100 == 0) console.log(`${prompts.length} prompts created`)
+    if (promptResponses.length % 100 == 0) console.log(`${promptResponses.length} prompts created`)
   }
   // console.log("PROMPTS", prompts.slice(0, 20).map((e)=>e.prompt))
-	console.log("SIZE", JSON.stringify(prompts).length)
-  return prompts;
+	console.log("SIZE", JSON.stringify(promptResponses).length)
+
+  return promptResponses;
 }
 
