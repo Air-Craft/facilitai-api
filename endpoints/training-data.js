@@ -22,7 +22,6 @@ module.exports = async (req, res) => {
 
 
     if (true) {
-
     	// Set headers to prompt file download
 		  res.setHeader('Content-Disposition', 'attachment; filename="facilitai-training.jsonl"');
 		  res.setHeader('Content-Type', 'application/jsonl');
@@ -48,8 +47,6 @@ module.exports = async (req, res) => {
   }
 
 }
-
-
 
 // Helper function to extract names from arrays of objects
 function extractNames(array) {
