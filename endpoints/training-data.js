@@ -15,10 +15,11 @@ module.exports = async (req, res) => {
     const trainingData = generateSyntheticPrompts(numPrompts, data);
 
     // Convert training data to JSON Lines format
-    const jsonlData = trainingData.map(item => JSON.stringify({
-      prompt: item.prompt,
-      response: item.response
-    })).join('\n');
+    const jsonlData = JSON.stringify(trainingData)
+    //     .map(item => JSON.stringify({
+    //   prompt: item.prompt,
+    //   response: item.response
+    // })).join(',\n');
 
 
     if (true) {
@@ -31,7 +32,7 @@ module.exports = async (req, res) => {
 
     } else {
     	return res.json(jsonlData)
-  	} 
+  	}
 
     // // Set the response headers for file download
     // res.setHeader('Content-disposition', 'attachment; filename=training_data.jsonl');
@@ -54,7 +55,7 @@ function extractNames(array) {
 }
 function extractStringVariants(processes, field) {
 	const all = processes.map( item => item[field].replace(/\s+/g, ''))
-	const unique = all.filter((item, index) => 
+	const unique = all.filter((item, index) =>
     all.indexOf(item) === index && item !== ''
 	)
 	return unique
@@ -85,51 +86,51 @@ const promptTemplates = [
   "Please recommend activities with {miscTag} for {groupType} that include {physicality}.",
   "What activities can {groupType} do that involve {physicality} and {activityType}?",
   "What are some activities I can do with {groupType}?",
-  
+
   // New templates involving duration
   "What activities can be done in {duration}?",
   "Suggest some activities that last around {duration}.",
   "I have {duration} available. What activities can I do?",
   "List activities with a duration of {duration}.",
-  
+
   // New templates involving just genre
   "What activities are there in the genre of {genre}?",
   "Suggest some {genre} activities.",
   "I'm interested in {genre}. What activities can you recommend?",
   "Do you have any activities related to {genre}?",
-  
+
   // New templates involving just activityType
   "List some {activityType} activities.",
   "What are some activities that involve {activityType}?",
   "Can you recommend activities focused on {activityType}?",
   "Suggest activities categorized under {activityType}.",
-  
+
   // New templates involving just physicality
   "What activities involve {physicality}?",
   "Suggest activities that include {physicality}.",
   "I'm looking for activities with {physicality}. What do you recommend?",
   "List activities that require {physicality}.",
-  
+
   // Templates involving physicality & activityType
   "What {activityType} activities involve {physicality}?",
   "Can you suggest {activityType} activities that include {physicality}?",
   "I'm interested in {activityType} activities with {physicality}.",
-  
+
   // Templates involving duration & physicality
   "What activities lasting {duration} involve {physicality}?",
   "Suggest activities that take around {duration} and include {physicality}.",
   "Do you have any {duration} activities that involve {physicality}?",
-  
+
   // Templates involving duration & groupType
   "What activities for {groupType} last about {duration}?",
   "Suggest {duration} activities suitable for {groupType}.",
   "I'm looking for activities for {groupType} that take around {duration}.",
-  
+
   // Templates involving groupType & physicality
   "What activities for {groupType} involve {physicality}?",
   "Suggest activities suitable for {groupType} that include {physicality}.",
   "I'm seeking activities for {groupType} that involve {physicality}.",
-  
+
   // Templates involving duration & genre
   "What {genre} activities can be done in {duration}?",
   "Suggest {genre} activities that last around {duration}.",
@@ -158,7 +159,7 @@ function generateSyntheticPrompts(numPrompts, data) {
 
   const promptResponses = [];
   while (promptResponses.length < numPrompts) { //if (let i = 0; i < numPrompts; i++) {
-    
+
   	const template = promptTemplates[Math.floor(Math.random() * promptTemplates.length)];
     // console.log("TEMPL", template)
 
@@ -196,7 +197,7 @@ function generateSyntheticPrompts(numPrompts, data) {
           break;
       }
     });
-    
+
     // Create prompt using the template
     const prompt = fillTemplate(template, placeholders);
 
@@ -223,7 +224,7 @@ function generateSyntheticPrompts(numPrompts, data) {
       	return criteriaMatched;
     });
 
-    
+
     if (matchingProcesses.length > 0) {
     	// if (Object.keys(placeholders).length > 1) {
     	// 	console.log(`MATCHED ${matchingProcesses.length} for `, placeholders)
