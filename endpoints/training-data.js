@@ -20,7 +20,19 @@ module.exports = async (req, res) => {
       response: item.response
     })).join('\n');
 
-    return res.json(jsonlData)
+
+    if (true) {
+
+    	// Set headers to prompt file download
+		  res.setHeader('Content-Disposition', 'attachment; filename="facilitai-training.jsonl"');
+		  res.setHeader('Content-Type', 'application/jsonl');
+
+  		// Send the data directly
+  		res.send(jsonlData);
+
+    } else {
+    	return res.json(jsonlData)
+  	} 
 
     // // Set the response headers for file download
     // res.setHeader('Content-disposition', 'attachment; filename=training_data.jsonl');
@@ -141,7 +153,7 @@ function generateSyntheticPrompts(numPrompts, data) {
   const groupTypes = extractNames(data.groupTypes);
   const miscTags = extractNames(data.tags); // Assuming 'tags' correspond to 'miscTags'
   const durations = extractStringVariants(data.processes, 'duration')
-  console.log("DURATIONS", durations)
+  // console.log("DURATIONS", durations)
 
   const processes = data.processes;
 
@@ -248,15 +260,15 @@ function generateSyntheticPrompts(numPrompts, data) {
         	groupType: groupType
         }
 
-        console.log(replaceMap)
+        // console.log(replaceMap)
 
         return fillTemplate(processResponseTemplate, replaceMap)
       }).join('\n\n');
 
       // Add the prompt and response pair to the prompts array
       const fullResp = `${responsePrefix} ${response}`
-      const promptResp = { prompt, fullResp }
-      console.log(promptResp)
+      const promptResp = { prompt, response: fullResp }
+      // console.log(promptResp)
 
       promptResponses.push(promptResp);
 
@@ -270,7 +282,9 @@ function generateSyntheticPrompts(numPrompts, data) {
   }
   // console.log("PROMPTS", prompts.slice(0, 20).map((e)=>e.prompt))
 	console.log("SIZE", JSON.stringify(promptResponses).length)
+	// console.log("PRs", promptResponses)
 
-  return promptResponses;
+
+	return promptResponses
 }
 
