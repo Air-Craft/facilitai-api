@@ -1,5 +1,6 @@
 const config = { 
 
+	frontendUrl: 'https://facilitai-frontend.onrender.com',
 	graphqlUrl: "https://processwiki.herokuapp.com/api/graphql",
 	
 
