@@ -1,18 +1,19 @@
 const config = require('../config')
-const fetchAllData = require('../lib/services/fetchAllData')
+const { fetchAllProcesses } = require('../lib/services/fetchData')
+const { extractStringVariants } = require('../lib/utils')
 
 module.exports = async (req, res) => {
 
 	try {
     // Fetch data from the GraphQL API
   	console.log("Exporting GraphQL data...")
-	  const data = await fetchAllData()
+	  const data = await fetchAllProcesses()
 	  // console.log("DATA", data)
 
     // Generate training data
     //console.log("REQ", req.body, req.query)
-    const numPrompts = req.query.numPrompts; // Adjust the number as needed
-    const trainingData = generateSyntheticPrompts(numPrompts, data);
+    const numPrompts = req.query.numPrompts  // Adjust the number as needed
+    const trainingData = generateSyntheticPrompts(numPrompts, data)
 
     // Convert training data to JSON Lines format
     const jsonlData = JSON.stringify(trainingData)
@@ -52,13 +53,6 @@ module.exports = async (req, res) => {
 // Helper function to extract names from arrays of objects
 function extractNames(array) {
   return array.map(item => item.name);
-}
-function extractStringVariants(processes, field) {
-	const all = processes.map( item => item[field].replace(/\s+/g, ''))
-	const unique = all.filter((item, index) =>
-    all.indexOf(item) === index && item !== ''
-	)
-	return unique
 }
 
 const responsePrefix = 'Here are some processes you might try:\n\n'
