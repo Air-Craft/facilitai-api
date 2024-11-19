@@ -5,61 +5,74 @@ const JSON5 = require('json5')
 const L = require('../lib/logger')
 
 module.exports = async (req, res) => {
-  const userQuery = req.body.query;
-  L.info("Querying API with input query: ", userQuery)
+  const messages = req.body.messages;
 
-  if (!userQuery) {
+  L.info("Querying API with latest input query: ", messages[messages.length - 1].content, "Conversation length: ", messages.length)
+  L.dir(messages)
+
+  if (!messages) {
     return res.status(400).json({ error: 'No query provided.' });
   }
 
+  var engineeredPrompt = null  // to return the engineered prompt to the frontend for subsquent resubmissions
+
   try {
-    /*
-    MAIN FLOW
+    
+    var answer = ''
 
+    // MAIN FLOW
+    // If follow up then just pass all messages to the LLM.  Otherwise we have some preamble to do
+    if (messages.length > 1) {
+      L.info("Querying LLM with messages: ", messages)
+      answer = await queryLLM(messages)
 
-    QUICK START
-    1) query the various database parameters 
-    2) Construct llm query to convert user query to db search parameters
-    3) Run the search to retrieve the context data
-    4) Run the llm query with the data context and prompt engineering to generate the results
-    5) (convert into a conversation bot rather than a single search)
+    } else {
 
-    BETTER
-    *) Above does not include the description texts and doesnt allow smart handling of group size or duration
-    *) Convert tags to text statements and combine with text content. Create vector set representation of the text content.
-    *) Handle duration second. Feed the id and duration to a second query to get ones that work for the duration
-    *) finally add the records as the context to the query and begin the conversation
-    */
+      /*
+      QUICK START VERSION
+      1) query the various database parameters 
+      2) Construct llm query to convert user query to db search parameters
+      3) Run the search to retrieve the context data
+      4) Run the llm query with the data context and prompt engineering to generate the results
+      5) (convert into a conversation bot rather than a single search)
 
-    // Use the LLM to generate a "where" param for the graphQL search based on the user's query
-    L.debug("Determining 'where' clause for GraphQL query...")
-    const whereClause = await determineGQLWhereClause(userQuery)
-    L.debug("...where: ", whereClause)
+      BETTER
+      *) Above does not include the description texts and doesnt allow smart handling of group size or duration
+      *) Convert tags to text statements and combine with text content. Create vector set representation of the text content.
+      *) Handle duration second. Feed the id and duration to a second query to get ones that work for the duration
+      *) finally add the records as the context to the query and begin the conversation
+      */
+      const userQuery = messages[0].content
 
-    // Do the search
-    L.debug("Fetching related processes...")
-    const results = await fetchProcesses(whereClause)
-    const processes = results.processes
+      // Use the LLM to generate a "where" param for the graphQL search based on the user's query
+      L.debug("Determining 'where' clause for GraphQL query...")
+      const whereClause = await determineGQLWhereClause(userQuery)
+      L.debug("...where: ", whereClause)
 
-    L.debug("...found: ", processes.length, " results.")
-    L.verbose("Processes:\n", processes)
+      // Do the search
+      L.debug("Fetching related processes...")
+      const results = await fetchProcesses(whereClause)
+      const processes = results.processes
 
-    // Convert processes into strings for the Context of the LLM query
-    var processesContext = ""
-    if (processes.length > 0) {
-      for (const process of processes) {
-        processesContext += processToLLMString(process) + "\n\n"
+      L.debug("...found: ", processes.length, " results.")
+      // L.verbose("Processes:\n", processes)
+
+      // Convert processes into strings for the Context of the LLM query
+      var processesContext = ""
+      if (processes.length > 0) {
+        for (const process of processes) {
+          processesContext += processToLLMString(process) + "\n\n"
+        }
       }
-    }
-    // L.verbose("Process Context:\n", processesContext)
+      // L.verbose("Process Context:\n", processesContext)
 
-    // Key parts for the system prompt
-    // * Tone
-    // * Use the given context only(?)
-    // * How to format the output. What to include in initial 
-    // * Instructions to not engage when query does not pertain to purpose of this LLM
+      // Key parts for the system prompt
+      // * Tone
+      // * Use the given context only(?)
+      // * How to format the output. What to include in initial 
+      // * Instructions to not engage when query does not pertain to purpose of this LLM
 
-    const promptWithContext = `
+      engineeredPrompt = `
 System: 
 You are a helpful and enthusiastic research assistant for a database of processes for facilitators to run.
 The potentially relevant processes are provided in Database.
@@ -80,12 +93,14 @@ ${userQuery}
 Database:
 ${processesContext}
 `
-    L.debug("Querying LLM for final answer...)")
-    const answer = await queryLLM(promptWithContext)
-    
-    L.debug("...LLM Result: ", answer)
+      L.debug("Querying LLM for final answer...)")
+      answer = await queryLLM(textToLLM(engineeredPrompt))
 
-    res.json({ response: answer });
+    } // end if...else...
+
+    L.debug("QUERY ANSWER: ", answer)
+
+    res.json({ response: answer, prompt: engineeredPrompt });
 
   } catch (error) {
     L.error('Error: Call to /query failed:', error.message)
@@ -97,6 +112,14 @@ ${processesContext}
     res.status(500).json({ error: 'Query failed.' });
   }
 }
+
+/** 
+ * Wrap simple one-off text query for LLM messages format
+ */
+function textToLLM(text) {
+  return [{ role: 'user', content: text }]
+}
+
 
 
 
@@ -135,7 +158,7 @@ async function determineGQLWhereClause(userQuery) {
   // L.verbose("PROMPT: ", prompt)
 
   // Run the query and parse the resultant json string to ensure it works
-  const generatedText = await queryLLM(prompt);
+  const generatedText = await queryLLM(textToLLM(prompt));
 L.debug("GENERATED TEXT: ", generatedText)
   const graphQLWhereClause = fixGeneratedWhereClause(generatedText)
 L.debug("FIXED TEXT: ", graphQLWhereClause)
@@ -333,3 +356,5 @@ function documentToMarkdown(document) {
   // Return the accumulated markdown
   return markdown;
 }
+
+
