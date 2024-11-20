@@ -44,18 +44,30 @@ module.exports = async (req, res) => {
       */
       const userQuery = messages[0].content
 
+      // 1. USE LLM TO GENERATE WHERE CLAUSE
+
       // Use the LLM to generate a "where" param for the graphQL search based on the user's query
       L.debug("Determining 'where' clause for GraphQL query...")
       const whereClause = await determineGQLWhereClause(userQuery)
       L.debug("...where: ", whereClause)
 
-      // Do the search
-      L.debug("Fetching related processes...")
-      const results = await fetchProcesses(whereClause)
-      const processes = results.processes
 
-      L.debug("...found: ", processes.length, " results.")
-      // L.verbose("Processes:\n", processes)
+      // 2. FETCH PROCESSES RELATED TO THE QUERY
+
+      // Do the search if we have a where clause
+      let processes = []
+      if (whereClause !== '') {
+        L.debug("Fetching related processes...")
+        const results = await fetchProcesses(whereClause)
+        processes = results.processes
+        L.debug("...found: ", processes.length, " results.")
+        // L.verbose("Processes:\n", processes)
+      } else {
+        L.info("No where clause generated. No processes fetched.")
+      }
+
+
+      // 3. QUERY LLM WITH FETCHED PROCESSES AS THE CONTEXT
 
       // Convert processes into strings for the Context of the LLM query
       var processesContext = ""
@@ -197,12 +209,19 @@ function fixGeneratedWhereClause(code) {
   code = code.replace(/^`?where:\s*/, '');
 
   // remove backticks
-  code = code.replace(/\`/g, '').trim();
+  code = code.replace(/[\`\"]+/g, '').trim();
+
+  // Return if empty
+  if (code == '') {
+    return '';
+  }
+
 
  // Ensure it is wrapped in { }
   if (!code.startsWith('{')) {
     code = `{${code}}`;
   }
+
 
   // Convert the string into a JavaScript object.
   // We'll use `Function` constructor for safer parsing than `eval`.
