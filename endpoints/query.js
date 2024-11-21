@@ -209,7 +209,8 @@ function fixGeneratedWhereClause(code) {
   code = code.replace(/^`?where:\s*/, '');
 
   // remove backticks
-  code = code.replace(/[\`\"]+/g, '').trim();
+  code = code.replace(/\`+/g, '').trim();
+  code = code.replace(/^""$/g, '');  // ditch empty string quotes
 
   // Return if empty
   if (code == '') {
