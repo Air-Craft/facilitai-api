@@ -11,6 +11,7 @@ const exportData = require('./endpoints/export')
 const query = require('./endpoints/query')
 
 const config = require('./config');
+const L =  require('./lib/logger');
 
 require('dotenv').config();
 
@@ -47,5 +48,9 @@ app.get('/export', async (req, res) => {
 
 
 app.listen(port, () => {
-  console.log(`API server listening at http://localhost:${port}`);
+  L.info(`API server listening at http://localhost:${port}`);
+  L.info("Using LLM Model " + process.env.HF_MODEL_ID)
+
 });
+
+

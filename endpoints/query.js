@@ -18,7 +18,8 @@ module.exports = async (req, res) => {
 
   try {
     
-    var answer = ''
+    let answer = ''
+    let whereClause = null
 
     // MAIN FLOW
     // If follow up then just pass all messages to the LLM.  Otherwise we have some preamble to do
@@ -48,7 +49,7 @@ module.exports = async (req, res) => {
 
       // Use the LLM to generate a "where" param for the graphQL search based on the user's query
       L.debug("Determining 'where' clause for GraphQL query...")
-      const whereClause = await determineGQLWhereClause(userQuery)
+      whereClause = await determineGQLWhereClause(userQuery)
       L.debug("...where: ", whereClause)
 
 
@@ -97,6 +98,7 @@ In subsequent queries, you may answer questions about the processes give in the 
 If a user's query does not relate to searching for facilitation processes, do not answer their question but just remind them about your scope.
 Again do not answer questions outside of the scope outlined above.
 Format your answer as Markdown. Make the title a header.
+Please use the English language.
 
 User Query:
 ${userQuery}
@@ -111,7 +113,7 @@ ${processesContext}
 
     L.debug("QUERY ANSWER: ", answer)
 
-    res.json({ response: answer, prompt: engineeredPrompt });
+    res.json({ response: answer, prompt: engineeredPrompt, where: whereClause });
 
   } catch (error) {
     L.error('Error: Call to /query failed:', error.message)
@@ -153,16 +155,17 @@ async function determineGQLWhereClause(userQuery) {
   const prompt = 
     "System: " + 
 "Generate a valid \"where\" clause for GraphQL (keystoneJS) given the following User Query and Metadata. " + 
-"The Metadata categories (e.g. genres) represents objects with a many-to-many relationship in the graphQL database. " +
-"The values listed represent all possible values of the \"name\" property of their respective objects." +
-"Pay careful attention on how you combine them with booleans (AND, OR, NOT) and other filters keys (e.g. \"in\", \"some\", \"all\") so that it accurately models the User Query." +
-"Important: Only give the resulting where clause, none of the explanation or preamble!" +
-"If no metadata values are clear for a given parameter, exclude it from the where string." +
-"If no parameters have clear values return an empty string." +
-"Return the \"where\" string only. Do not include any other text." +
-"Make sure this is correct GraphQL code and uses booleans explicitly and correctly." +
-    "-- Metadata: " + metadataString +
-    "-- User Query: " + userQuery
+"The Metadata categories (e.g. genres) represent objects in the graphQL database with a many-to-many relationship to the \"processes\" being queried with the \"where\" clause. " +
+"The values listed represent all possible values of the \"name\" sub-field of their respective objects. " +
+"IMPORTANT: Do not use values in the \"where\" clause that are not listed for that property in the Metadata." +
+"Pay careful attention on how you combine them with booleans (AND, OR, NOT) and other filters keys (e.g. \"in\", \"some\", \"all\") so that it accurately models the User Query. " +
+"Important: Only give the resulting \"where\" clause, without any explanation or preamble! " +
+"If no metadata values are clear for a given parameter, exclude it from the \"where\" clause. " +
+"If no parameters have clear values return an empty string. " +
+"Return the \"where\" string only. Do not include any other text. " +
+"Ensure the result given is a correctly formatted GraphQL object literal without any surrounding quotes or backticks. Ensure that opening { and closing } are balanced." +
+    "---- Metadata: " + metadataString +
+    "---- User Query: " + userQuery
 
 
 //  var prompt = "<s>[INST]You are an excessively happy and excited dracula character[/INST]</s>[INST]tell me how you like people[/INST]"
@@ -244,31 +247,43 @@ function fixGeneratedWhereClause(code) {
     if (Array.isArray(obj)) {
       return obj.map(transform);
     } else if (obj && typeof obj === 'object') {
-      const newObj = {};
+      let newObj = {};
       for (const key in obj) {
         const value = obj[key];
 
+        const metadataKeysList = ["activityTypes", "genres", "groupTypes", "physicalities", "miscTags"]
+
+        // this is covered (better) by the one below it
         // FIX: If the key contains an underscore, split it and nest
-        if (key.includes('_')) {
-          const [outerKey, innerKey] = key.split('_');
-          newObj[outerKey] = newObj[outerKey] || {};
-          newObj[outerKey][innerKey] = transform(value);
-        }
+        // if (key.includes('_')) {
+        //   const [outerKey, innerKey] = key.split('_');
+        //   newObj[outerKey] = newObj[outerKey] || {};
+        //   newObj[outerKey][innerKey] = transform({ innerKey: value);
+        // }
+
         // FIX: If the key ends with a modifier (e.g., '_in'), split and nest
-        else if (key.match(/^(.*?)(_(in|some|none|every|not|gt|lt|gte|lte))$/)) {
+        if (key.match(/^(.*?)(_(in|some|none|every|not|gt|lt|gte|lte))$/)) {
           const [, propName, , modifier] = key.match(/^(.*?)(_(in|some|none|every|not|gt|lt|gte|lte))$/);
           newObj[propName] = newObj[propName] || {};
-          newObj[propName][modifier] = transform(value);
-        } else if (["activityTypes", "genres", "groupTypes", "physicalities", "miscTags"].includes(key) && value.in) {
+          newObj[propName][modifier] = value;
+          newObj = transform(newObj); // could need one of the rules below
+        } else if (metadataKeysList.includes(key) && value.in) {
           // FIX: Insert "name" before "in" modifier
-          newObj[key] = { some: { name: transform(value) } }
+          newObj[key] = { some: { name: value } }
+        } else if (key == "some" && metadataKeysList.includes(Object.keys(value)[0])) {
+          // Fix "some" before metadata key. should be after
+          L.debug("SOME!", Object.keys(value)[0])
+          newObj[Object.keys(value)[0]] = { some: transform(value) }
         } else if (key == "some" && value.in) {
           newObj[key] = { name: value }
+        } else if (key == "some" && value.contains) {
+          // FIX some > contains
+          newObj["some"] = { name: { in: value.contains } }        
         } else if (key == "name" && !value.in) {
           // FIX: Add "in" for name lists
           newObj[key] = { in: value } 
         } else if (key == "contains") {
-          // FIX: "contains" is not correct. For many2many we need to convert it to "some > in"
+          // FIX: "contains" (without some preceeing) => some > in
           newObj["some"] = { name: { in: value } }
         } else if (key == "physical") {
           // FIX: physical => physicalities
