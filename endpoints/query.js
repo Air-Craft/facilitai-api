@@ -142,9 +142,9 @@ async function determineGQLWhereClause(userQuery) {
   L.info("Generating where clause from userQuery: ", userQuery)
 
   const metadata = await fetchMetadata();
-  
+   
   // Convert the metadata to a string where each line has the format: key: list, of, values
-  let metadataString = Object.entries(metadata).map(([key, values]) => `${key}: ${values.map((e)=>e.name).join(', ')}`).join('; ')
+  let metadataString = Object.entries(metadata).map(([key, values]) => `${key}: ${values.map((e)=>e.name).join(', ')}`).join('\n')
   // L.verbose("METADATA STRING: ", metadataString)
 
   // Convert "tags" to "miscTags" to match parameter on Processes
@@ -211,7 +211,7 @@ function fixGeneratedWhereClause(code) {
   // FIX: remove 'where:'  preamble
   code = code.replace(/^`?where:\s*/, '').trim();
   // FIX: remove wrapping backticks and possible json identifier
-  code = code.replace(/^`+(json)?/g, '')
+  code = code.replace(/^`+(json|graphql)?/g, '')
     code = code.replace(/`+$/g, '')
   // FIX: ditch literal empty string quotes. we just want an empty string
   code = code.replace(/^""$/g, '');  
@@ -261,12 +261,18 @@ function fixGeneratedWhereClause(code) {
           newObj[propName][modifier] = transform(value);
         } else if (["activityTypes", "genres", "groupTypes", "physicalities", "miscTags"].includes(key) && value.in) {
           // FIX: Insert "name" before "in" modifier
-          newObj[key] = { some: { name: value } }
+          newObj[key] = { some: { name: transform(value) } }
         } else if (key == "some" && value.in) {
           newObj[key] = { name: value }
         } else if (key == "name" && !value.in) {
           // FIX: Add "in" for name lists
           newObj[key] = { in: value } 
+        } else if (key == "contains") {
+          // FIX: "contains" is not correct. For many2many we need to convert it to "some > in"
+          newObj["some"] = { name: { in: value } }
+        } else if (key == "physical") {
+          // FIX: physical => physicalities
+          newObj["physicalities"] = transform(value)
         } else {
           newObj[key] = transform(value);
         }
