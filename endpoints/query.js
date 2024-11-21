@@ -91,10 +91,9 @@ The potentially relevant processes are provided in Database.
 In the initial query, you act like a search engine for the processes listed in Database. 
 List the ones that are relevant to the user's query. 
 If there are less than 5 from the Database then supplement with additional ones from outside the Database
+IMPORTANT: Clearly indicate which processes are outside the scope of the Database.
 First just give the user a list with titles and short summaries and offer to explain further.
 In subsequent queries, you may answer questions about the processes give in the first answer and also refine (add or remove) from your initial suggestions.
-
-Clearly indicate that these suggestions are outside the scope of the Database data.
 If a user's query does not relate to searching for facilitation processes, do not answer their question but just remind them about your scope.
 Again do not answer questions outside of the scope outlined above.
 Format your answer as Markdown. Make the title a header.
@@ -171,9 +170,9 @@ async function determineGQLWhereClause(userQuery) {
 
   // Run the query and parse the resultant json string to ensure it works
   const generatedText = await queryLLM(textToLLM(prompt));
-L.debug("GENERATED TEXT: ", generatedText)
+L.debug("RAW WHERE (from LLM): ", generatedText)
   const graphQLWhereClause = fixGeneratedWhereClause(generatedText)
-L.debug("FIXED TEXT: ", graphQLWhereClause)
+L.debug("FIXED WHERE: ", graphQLWhereClause)
   return graphQLWhereClause
 }
 
@@ -205,30 +204,42 @@ Physicalities: ${process.physicalities.map((e) => e.name).join(', ')}
  * @returns {Object} - The transformed where clause object.
  */
 function fixGeneratedWhereClause(code) {
-  // Remove 'where: ' preamble. Also Llama 3.1 adds backticks
-  code = code.replace(/^`?where:\s*/, '');
+  // Various fixes encountered
 
-  // remove backticks
-  code = code.replace(/\`+/g, '').trim();
-  code = code.replace(/^""$/g, '');  // ditch empty string quotes
+  // FIX: ensure boundary conditions below work
+  code = code.trim();  
+  // FIX: remove 'where:'  preamble
+  code = code.replace(/^`?where:\s*/, '').trim();
+  // FIX: remove wrapping backticks and possible json identifier
+  code = code.replace(/^`+(json)?/g, '')
+    code = code.replace(/`+$/g, '')
+  // FIX: ditch literal empty string quotes. we just want an empty string
+  code = code.replace(/^""$/g, '');  
+
+  L.debug("CODE", code)
 
   // Return if empty
   if (code == '') {
     return '';
   }
 
+  code = code.trim()
 
- // Ensure it is wrapped in { }
+
+ // FIX: Ensure it is wrapped in { }. (maybe we need an explicit field and keywork check here)
   if (!code.startsWith('{')) {
     code = `{${code}}`;
   }
 
 
+  // Try a few thigns
+  // - wrap in {} and parse
+  // - if that fails then remove all before and after } and try
   // Convert the string into a JavaScript object.
   // We'll use `Function` constructor for safer parsing than `eval`.
-  const obj = Function('"use strict";return (' + code + ')')();
+  let obj = Function('"use strict";return (' + code + ')')();
 
-  // Function to recursively transform the object
+  // FIX: Function to recursively transform the object
   function transform(obj) {
     if (Array.isArray(obj)) {
       return obj.map(transform);
@@ -237,24 +248,24 @@ function fixGeneratedWhereClause(code) {
       for (const key in obj) {
         const value = obj[key];
 
-        // If the key contains an underscore, split it and nest
+        // FIX: If the key contains an underscore, split it and nest
         if (key.includes('_')) {
           const [outerKey, innerKey] = key.split('_');
           newObj[outerKey] = newObj[outerKey] || {};
           newObj[outerKey][innerKey] = transform(value);
         }
-        // If the key ends with a modifier (e.g., '_in'), split and nest
+        // FIX: If the key ends with a modifier (e.g., '_in'), split and nest
         else if (key.match(/^(.*?)(_(in|some|none|every|not|gt|lt|gte|lte))$/)) {
           const [, propName, , modifier] = key.match(/^(.*?)(_(in|some|none|every|not|gt|lt|gte|lte))$/);
           newObj[propName] = newObj[propName] || {};
           newObj[propName][modifier] = transform(value);
         } else if (["activityTypes", "genres", "groupTypes", "physicalities", "miscTags"].includes(key) && value.in) {
-          // Insert "name" before "in" modifier
+          // FIX: Insert "name" before "in" modifier
           newObj[key] = { some: { name: value } }
         } else if (key == "some" && value.in) {
           newObj[key] = { name: value }
         } else if (key == "name" && !value.in) {
-          // Add "in" for name lists
+          // FIX: Add "in" for name lists
           newObj[key] = { in: value } 
         } else {
           newObj[key] = transform(value);
@@ -263,6 +274,11 @@ function fixGeneratedWhereClause(code) {
       return newObj;
     }
     return obj;
+  }
+
+  // FIX: Remove "where" outer condition
+  if (obj.where) {
+    obj = obj.where
   }
 
   const transformedObj = transform(obj);
@@ -283,6 +299,7 @@ function fixGeneratedWhereClause(code) {
   }
 
   let fixedQueryStr = stringify(transformedObj);
+  
   return fixedQueryStr
 }
 
